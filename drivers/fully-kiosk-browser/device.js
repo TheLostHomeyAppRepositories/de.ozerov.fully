@@ -57,6 +57,10 @@ module.exports = class FullyKioskBrowserDevice extends Homey.Device {
     params = {},
     password = null,
   }) {
+    if (!this.discoveryResult || !this.discoveryResult?.address || !this.discoveryResult?.port) {
+      throw new Error('Device Unavailable');
+    }
+
     if (!cmd) throw new Error('Command is required');
 
     if (password === null) {

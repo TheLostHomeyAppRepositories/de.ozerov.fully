@@ -10,5 +10,8 @@
   },
   "1.2.0": {
     "en": "Added instructions before pairing to enable mDNS."
+  },
+  "1.2.1": {
+    "en": "throw on command when no discovery result is available."
   }
 }

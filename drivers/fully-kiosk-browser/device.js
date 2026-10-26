@@ -22,14 +22,32 @@ module.exports = class FullyKioskBrowserDevice extends Homey.Device {
     this.pollInterval = this.homey.setInterval(() => {
       this.poll();
     }, POLL_INTERVAL);
+
+    const settings = await this.getSettings();
+    if (settings?.ip_address) {
+      await this.poll();
+    }
   }
 
   async onSettings({ oldSettings, newSettings, changedKeys }) {
+    // Test the new IP address
+    if (changedKeys.includes('ip_address')) {
+      if (typeof newSettings.ip_address === 'string' && newSettings.ip_address.length > 0) {
+        await this.driver.verifyIP({ ip_address: newSettings.ip_address });
+      }
+    }
+
     // Test the new password
-    await this.cmd({
-      cmd: 'getDeviceInfo',
-      password: newSettings.password,
-    });
+    if (changedKeys.includes('password')) {
+      await this.cmd({
+        cmd: 'getDeviceInfo',
+        password: newSettings.password,
+      });
+    }
+
+    this.homey.setTimeout(() => {
+      this.poll();
+    }, 500);
   }
 
   poll() {
@@ -37,8 +55,12 @@ module.exports = class FullyKioskBrowserDevice extends Homey.Device {
       const deviceInfo = await this.cmd_getDeviceInfo();
       this.log('Device Info:', JSON.stringify(deviceInfo));
 
-      this.setCapabilityValue('onoff', deviceInfo.screenOn === true).catch(err => this.error(`Error setting capability onoff: ${err.message}`));
-    }).catch(err => this.error(`Error Polling: ${err.message}`));
+      await this.setCapabilityValue('onoff', deviceInfo.screenOn === true);
+      await this.setAvailable();
+    }).catch(err => {
+      this.error(`Error Polling: ${err.message}`);
+      this.setUnavailable(err).catch(err => this.error(`Error setting unavailable: ${err.message}`));
+    });
 
   }
 
@@ -57,8 +79,17 @@ module.exports = class FullyKioskBrowserDevice extends Homey.Device {
     params = {},
     password = null,
   }) {
-    if (!this.discoveryResult || !this.discoveryResult?.address || !this.discoveryResult?.port) {
-      throw new Error('Device Unavailable');
+    let address, port;
+
+    const settings = await this.getSettings();
+    if (settings?.ip_address) {
+      [address, port = 2323] = settings.ip_address.split(':');
+    } else {
+      if (!this.discoveryResult || !this.discoveryResult?.address || !this.discoveryResult?.port) {
+        throw new Error('Device Unavailable');
+      }
+      address = this.discoveryResult.address;
+      port = this.discoveryResult.port;
     }
 
     if (!cmd) throw new Error('Command is required');
@@ -70,8 +101,8 @@ module.exports = class FullyKioskBrowserDevice extends Homey.Device {
 
     const url = new URL('http://localhost');
     url.protocol = 'http:';
-    url.hostname = this.discoveryResult.address;
-    url.port = this.discoveryResult.port;
+    url.hostname = address;
+    url.port = port;
     url.searchParams.set('cmd', cmd);
     url.searchParams.set('password', password);
     url.searchParams.set('type', 'json');

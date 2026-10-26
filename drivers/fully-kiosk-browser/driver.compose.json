@@ -39,6 +39,9 @@
       "id": "enter_password"
     },
     {
+      "id": "enter_ip"
+    },
+    {
       "id": "add_devices",
       "template": "add_devices"
     }
@@ -49,6 +52,17 @@
       "type": "password",
       "label": {
         "en": "Password"
+      }
+    },
+    {
+      "id": "ip_address",
+      "type": "text",
+      "label": {
+        "en": "IP Address"
+      },
+      "value": "",
+      "hint": {
+        "en": "Manually enter the IP address of your device. Leave empty to use automatic discovery using mDNS-SD."
       }
     }
   ]

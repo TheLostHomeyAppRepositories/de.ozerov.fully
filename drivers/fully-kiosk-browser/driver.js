@@ -121,18 +121,31 @@ module.exports = class FullyKioskBrowserDriver extends Homey.Driver {
       return devices;
     });
 
+    session.setHandler('verify_ip', async ({ ip_address }) => {
+      await this.verifyIP({ ip_address });
+    });
+
     session.setHandler('verify_password', async ({ device, password }) => {
-      const discoveryStrategy = this.getDiscoveryStrategy();
-      const discoveryResults = discoveryStrategy.getDiscoveryResults();
-      const discoveryResult = discoveryResults[device.data.id];
-      if (!discoveryResult) {
-        throw new Error('Discovery Strategy Not Found');
+      let address, port;
+
+      if (device?.settings?.ip_address) {
+        [address, port = 2323] = device.settings.ip_address.split(':');
+      } else {
+        const discoveryStrategy = this.getDiscoveryStrategy();
+        const discoveryResults = discoveryStrategy.getDiscoveryResults();
+        const discoveryResult = discoveryResults[device.data.id];
+        if (!discoveryResult) {
+          throw new Error('Discovery Strategy Not Found');
+        }
+
+        address = discoveryResult.address;
+        port = discoveryResult.port ?? 2323;
       }
 
       const url = new URL('http://localhost');
       url.protocol = 'http:';
-      url.hostname = discoveryResult.address;
-      url.port = discoveryResult.port;
+      url.hostname = address;
+      url.port = port;
       url.searchParams.set('cmd', 'getDeviceInfo');
       url.searchParams.set('password', password);
       url.searchParams.set('type', 'json');
@@ -157,6 +170,33 @@ module.exports = class FullyKioskBrowserDriver extends Homey.Driver {
         deviceName: resJson.deviceName,
       };
     });
+  }
+
+  async verifyIP({ ip_address }) {
+    const [address, port = 2323] = ip_address.split(':');
+    const url = new URL('http://localhost');
+    url.protocol = 'http:';
+    url.hostname = address;
+    url.port = port;
+    url.searchParams.set('cmd', 'getDeviceInfo');
+    url.searchParams.set('type', 'json');
+
+    const res = await fetch(url.toString()).catch(err => {
+      if (err.message === 'fetch failed') {
+        throw new Error(`Could not reach Fully Kiosk Browser device at ${address}:${port}`);
+      }
+    });
+
+    if (!res.ok) {
+      throw new Error(`${res.status} ${res.statusText}`);
+    }
+
+    const resJson = await res.json();
+    if (resJson?.status === 'Error' && resJson?.statustext === 'Please login') {
+      return true;
+    }
+
+    throw new Error('Unsure whether this IP is a Fully Kiosk Browser device.');
   }
 
 };
